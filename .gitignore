@@ -1,0 +1,22 @@
+# macOS
+.DS_Store
+
+# Go build/test artifacts
+/dbquery
+/dbquery.exe
+*.test
+*.out
+*.coverprofile
+coverage.out
+
+# Build output directories
+/dist/
+/build/
+/bin/
+
+# Local app state (when run in local mode)
+/.dbquery/
+
+# Optional local env files
+.env
+.env.*

@@ -1,0 +1,65 @@
+version: 2
+
+project_name: dbquery
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: dbquery
+    main: ./cmd/dbquery
+    binary: dbquery
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - id: dbquery
+    ids:
+      - dbquery
+    formats:
+      - tar.gz
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_
+      {{- if eq .Os "darwin" }}Darwin
+      {{- else if eq .Os "linux" }}Linux
+      {{- else }}{{ .Os }}{{ end }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else }}{{ .Arch }}{{ end }}
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+
+release:
+  github:
+    owner: samyou
+    name: dbquery
+
+brews:
+  - name: dbquery
+    ids:
+      - dbquery
+    repository:
+      owner: samyou
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    directory: Formula
+    homepage: "https://github.com/samyou/dbquery"
+    description: "Natural language SQL CLI for SQLite, Postgres, and MySQL"
+    install: |
+      bin.install "dbquery"
+    test: |
+      system "#{bin}/dbquery", "--help"
