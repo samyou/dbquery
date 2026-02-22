@@ -19,6 +19,7 @@ const (
 	modeHistory = "history"
 	modeSet     = "set"
 	modeReset   = "reset"
+	modeShow    = "show"
 )
 
 type Config struct {
@@ -66,6 +67,8 @@ type Config struct {
 
 	ResetTarget string
 	Yes         bool
+
+	ShowTarget string
 }
 
 func Run() error {
@@ -84,6 +87,8 @@ func Run() error {
 		return runSet(cfg)
 	case modeReset:
 		return runReset(cfg)
+	case modeShow:
+		return runShow(cfg)
 	case modeChat:
 		return runChat(cfg)
 	case modeQuery:
@@ -269,7 +274,7 @@ func parseConfig(args []string) (Config, error) {
 	}
 
 	mode := modeQuery
-	if args[0] == modeChat || args[0] == modeHistory || args[0] == modeSet || args[0] == modeReset {
+	if args[0] == modeChat || args[0] == modeHistory || args[0] == modeSet || args[0] == modeReset || args[0] == modeShow {
 		mode = args[0]
 		args = args[1:]
 	}
@@ -282,6 +287,9 @@ func parseConfig(args []string) (Config, error) {
 	}
 	if mode == modeReset {
 		return parseResetConfig(args)
+	}
+	if mode == modeShow {
+		return parseShowConfig(args)
 	}
 
 	return parseQueryConfig(mode, args)
@@ -633,9 +641,64 @@ func parseResetConfig(args []string) (Config, error) {
 	return cfg, nil
 }
 
+func parseShowConfig(args []string) (Config, error) {
+	cfg := Config{
+		Mode:         modeShow,
+		ShowTarget:   "all",
+		SettingsFile: defaultSettingsFile(),
+		ProfilesFile: defaultProfilesFile(),
+	}
+
+	fs := flag.NewFlagSet("dbquery show", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	fs.StringVar(&cfg.SettingsFile, "settings-file", cfg.SettingsFile, "Path to defaults settings JSON file")
+	fs.StringVar(&cfg.ProfilesFile, "profiles-file", cfg.ProfilesFile, "Path to profiles JSON file")
+
+	fs.Usage = func() {
+		out := fs.Output()
+		fmt.Fprintf(out, "Usage:\n")
+		fmt.Fprintf(out, "  dbquery show [all|settings|profiles] [options]\n\n")
+		fmt.Fprintf(out, "Examples:\n")
+		fmt.Fprintf(out, "  dbquery show\n")
+		fmt.Fprintf(out, "  dbquery show settings\n")
+		fmt.Fprintf(out, "  dbquery show profiles\n\n")
+		fmt.Fprintf(out, "Options:\n")
+		fs.PrintDefaults()
+	}
+
+	parseArgs := args
+	if len(args) > 0 && isShowTargetToken(args[0]) {
+		cfg.ShowTarget = strings.ToLower(strings.TrimSpace(args[0]))
+		parseArgs = args[1:]
+	}
+
+	if err := fs.Parse(parseArgs); err != nil {
+		return cfg, err
+	}
+
+	rest := fs.Args()
+	if len(rest) > 1 {
+		return cfg, errors.New("usage: dbquery show [all|settings|profiles]")
+	}
+	if len(rest) == 1 {
+		cfg.ShowTarget = strings.ToLower(strings.TrimSpace(rest[0]))
+	}
+
+	if !isShowTargetToken(cfg.ShowTarget) {
+		return cfg, fmt.Errorf("unsupported show target %q (expected all|settings|profiles)", cfg.ShowTarget)
+	}
+
+	return cfg, nil
+}
+
 func isResetTargetToken(v string) bool {
 	t := strings.ToLower(strings.TrimSpace(v))
 	return t == "config" || t == "profile" || t == "all"
+}
+
+func isShowTargetToken(v string) bool {
+	t := strings.ToLower(strings.TrimSpace(v))
+	return t == "all" || t == "settings" || t == "profiles"
 }
 
 func removeFirstArg(args []string, needle string) []string {

@@ -3,7 +3,11 @@ package dbquery
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
+	"net/url"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -27,6 +31,9 @@ func openDatabase(ctx context.Context, cfg Config) (*sql.DB, error) {
 	case "sqlite":
 		driverName = "sqlite"
 		dsn = strings.TrimSpace(cfg.DBURL)
+		if err := validateSQLiteLocation(dsn); err != nil {
+			return nil, err
+		}
 	case "postgres":
 		driverName = "pgx"
 		dsn = strings.TrimSpace(cfg.DBURL)
@@ -53,10 +60,103 @@ func openDatabase(ctx context.Context, cfg Config) (*sql.DB, error) {
 
 	if err := db.PingContext(ctx); err != nil {
 		_ = db.Close()
+		if cfg.DBType == "sqlite" {
+			if strings.Contains(strings.ToLower(err.Error()), "unable to open database file") {
+				path, ok := sqlitePathFromDSN(dsn)
+				if ok {
+					return nil, fmt.Errorf("unable to open sqlite database file %q: %w", path, err)
+				}
+				return nil, fmt.Errorf("unable to open sqlite database: %w", err)
+			}
+		}
 		return nil, err
 	}
 
 	return db, nil
+}
+
+func validateSQLiteLocation(dsn string) error {
+	path, ok := sqlitePathFromDSN(dsn)
+	if !ok {
+		return nil
+	}
+
+	if strings.TrimSpace(path) == "" {
+		return nil
+	}
+
+	if strings.HasPrefix(path, "~") {
+		home, err := os.UserHomeDir()
+		if err == nil && home != "" {
+			path = filepath.Join(home, strings.TrimPrefix(path, "~/"))
+		}
+	}
+
+	info, err := os.Stat(path)
+	if err == nil {
+		if info.IsDir() {
+			return fmt.Errorf("sqlite path points to a directory: %s", path)
+		}
+		return nil
+	}
+
+	if errors.Is(err, os.ErrNotExist) {
+		parent := filepath.Dir(path)
+		if parent != "." && parent != "" {
+			if _, perr := os.Stat(parent); errors.Is(perr, os.ErrNotExist) {
+				return fmt.Errorf("sqlite database directory does not exist: %s", parent)
+			}
+		}
+		return fmt.Errorf("sqlite database file does not exist: %s", path)
+	}
+
+	return fmt.Errorf("check sqlite database path %q: %w", path, err)
+}
+
+func sqlitePathFromDSN(dsn string) (string, bool) {
+	raw := strings.TrimSpace(dsn)
+	if raw == "" {
+		return "", false
+	}
+
+	lower := strings.ToLower(raw)
+	if lower == ":memory:" || strings.HasPrefix(lower, "file::memory:") {
+		return "", false
+	}
+
+	if strings.HasPrefix(lower, "file:") {
+		u, err := url.Parse(raw)
+		if err == nil {
+			if strings.EqualFold(strings.TrimSpace(u.Query().Get("mode")), "memory") {
+				return "", false
+			}
+
+			path := strings.TrimSpace(u.Path)
+			if path == "" {
+				path = strings.TrimSpace(u.Opaque)
+			}
+			if path == "" {
+				path = strings.TrimPrefix(raw, "file:")
+			}
+			if decoded, err := url.PathUnescape(path); err == nil {
+				path = decoded
+			}
+			path = strings.TrimSpace(path)
+			if path == "" {
+				return "", false
+			}
+			if path == ":memory:" {
+				return "", false
+			}
+			return path, true
+		}
+	}
+
+	if idx := strings.Index(raw, "?"); idx > 0 {
+		return strings.TrimSpace(raw[:idx]), true
+	}
+
+	return raw, true
 }
 
 func executeQuery(ctx context.Context, db DBTX, query string) ([]string, []map[string]any, error) {

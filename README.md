@@ -46,7 +46,7 @@ Set API key once with `dbquery set` (recommended), or pass `--api-key` inline:
 ```bash
 ./dbquery \
   --db-type sqlite \
-  --db-url ./example/sample-sqlite.db \
+  --db-url ./examples/sample-sqlite.db \
   --query "get all rows in apple"
 ```
 
@@ -109,7 +109,7 @@ By default, `history` prints JSON.
 ```bash
 ./dbquery set llm-key sk_12345
 ./dbquery set db postgresql://user:pass@localhost:5432/app?sslmode=disable
-./dbquery set db sqlite ./example/sdsdf.db
+./dbquery set db sqlite ./examples/sample-sqlite.db
 ./dbquery set db postgresql postgres postgres://user:pass@localhost:5432/app?sslmode=disable
 ```
 
@@ -126,6 +126,16 @@ By default, `history` prints JSON.
 ```
 
 `reset` asks for confirmation (`[Y/n]`) unless `-y` is used.
+
+### 6) Show saved settings and profiles
+
+```bash
+./dbquery show
+./dbquery show settings
+./dbquery show profiles
+```
+
+`show` prints JSON output and masks API key value.
 
 ## Query/Chat Options
 
@@ -167,7 +177,7 @@ Use `dbquery set` to store defaults for API key and DB.
 ```bash
 ./dbquery set llm-key sk_12345
 ./dbquery set db postgresql://user:pass@localhost:5432/app?sslmode=disable
-./dbquery set db sqlite ./example/app.db
+./dbquery set db sqlite ./example/sample-sqlite.db
 ./dbquery set db postgresql postgres://user:pass@localhost:5432/app?sslmode=disable
 ./dbquery set --settings-file ./local-settings.json db mysql user:pass@tcp(localhost:3306)/mydb?parseTime=true
 ```
@@ -199,6 +209,27 @@ Options:
 - `--settings-file`: custom config file path for reset
 - `--profiles-file`: custom profiles file path for reset
 - `--history-file`: custom history file path for reset
+
+## Show Command
+
+Use `dbquery show` to inspect saved config and profiles.
+
+```bash
+./dbquery show
+./dbquery show settings
+./dbquery show profiles
+./dbquery show --settings-file ./local-settings.json
+./dbquery show --profiles-file ./local-profiles.json profiles
+```
+
+Targets:
+- `all` (default): show both settings and profiles
+- `settings`: show only settings file content
+- `profiles`: show only profiles file content
+
+Options:
+- `--settings-file`: custom settings file path
+- `--profiles-file`: custom profiles file path
 
 ### Override Priority
 
@@ -289,34 +320,13 @@ Show latest 20 entries with SQL text:
 ./dbquery history --full
 ```
 
-## Release (GoReleaser + Homebrew Tap)
-
-This repository is configured to publish GitHub releases and update Homebrew formula in:
-- CLI repo: `samyou/dbquery`
-- Tap repo: `samyou/homebrew-tap`
-
-### One-time setup
-
-1. Add a GitHub token secret in `samyou/dbquery`:
-   - name: `HOMEBREW_TAP_GITHUB_TOKEN`
-   - scope: repo access to `samyou/homebrew-tap` (contents write)
-2. Ensure the tap repo has `Formula/` directory.
-
-### Release flow
-
-```bash
-git tag v0.1.0
-git push origin v0.1.0
-```
-
-Tag push triggers `.github/workflows/release.yml`, which runs GoReleaser using `.goreleaser.yaml` to:
-- build binaries for darwin/linux (amd64/arm64)
-- create GitHub release assets + checksums
-- update `Formula/dbquery.rb` in `samyou/homebrew-tap`
-
 ## Safety Notes
 
 - By default, generated SQL must be read-only.
 - `--allow-write` disables that safety check.
 - `--limit` is automatically appended when query has no explicit limit (unless `--no-auto-limit`).
 - Always verify generated SQL for production use.
+
+## License
+
+MIT
